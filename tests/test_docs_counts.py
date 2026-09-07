@@ -18,7 +18,7 @@ README_PATTERNS = [
     r"unifies \*\*(\d+) global water-data sources\*\*",
     r"\| (\d+) unified data collectors \|",
     r"any of the (\d+) sources",
-    r"(\d+) data collectors spanning four regions",
+    r"(\d+) data collectors spanning five regions",
     r"All (\d+) sources",
 ]
 

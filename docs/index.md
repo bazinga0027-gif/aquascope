@@ -8,7 +8,7 @@
 [![Tests](https://img.shields.io/badge/tests-1000%2B%20passing-brightgreen.svg)](https://github.com/Rekin226/aquascope/actions)
 [![GitHub stars](https://img.shields.io/github/stars/Rekin226/aquascope?style=social)](https://github.com/Rekin226/aquascope/stargazers)
 
-AquaScope unifies **29 global water-data sources** behind one Python schema. On top of that it layers a full scientific computing stack, from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements**, wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Validated against the CAMELS benchmark with 1,000+ tests.
+AquaScope unifies **30 global water-data sources** behind one Python schema. On top of that it layers a full scientific computing stack, from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements**, wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Validated against the CAMELS benchmark with 1,000+ tests.
 
 ---
 
@@ -25,7 +25,7 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
 
 ## What you can do
 
-- 🌊 **Pull water data** from USGS, FAO AQUASTAT, FAO WaPOR, GEMStat, EU WFD, Copernicus ERA5, Taiwan MOENV / WRA, Japan MLIT, Korea WAMIS, OpenMeteo, and UN SDG 6, with one unified Python API.
+- 🌊 **Pull water data** from USGS, FAO AQUASTAT, FAO WaPOR, GEMStat, EU WFD, Copernicus ERA5, Taiwan MOENV / WRA, Japan MLIT, Korea WAMIS, South Africa DWS, OpenMeteo, and UN SDG 6, with one unified Python API.
 - 📈 **Run hydrological analyses**: Bulletin 17C flood frequency (GEV / LP3 / Gumbel / non-stationary GEV / EMA), baseflow separation, rating curves, and 22 hydrological signatures.
 - 🌾 **Plan agricultural water**: FAO-56 Penman–Monteith ET₀, crop water requirements for 23 crops, irrigation scheduling, and soil water balance with auto-irrigation.
 - 🤖 **Ask the AI engine**: describe your goal in plain English, get a recommended methodology scored against your dataset, and auto-execute it.
@@ -44,7 +44,7 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
 | Non-stationary GEV                           |    ✅     |   no    | partial  |          no           |
 | Baseflow separation (Lyne-Hollick, Eckhardt) |    ✅     |   no    |    no    |          no           |
 | FAO-56 Penman–Monteith ET₀ + crop water      |    ✅     |   no    |    no    |          no           |
-| 29 unified data collectors                   |    ✅     |   no    |    no    |       per-source       |
+| 30 unified data collectors                   |    ✅     |   no    |    no    |       per-source       |
 | AI methodology recommender                   |    ✅     |   no    |    no    |          no           |
 | Interactive Streamlit dashboard              |    ✅     |   no    |    no    |          no           |
 | Free, MIT, Python-native                     |    ✅     | partial |    ✅    |        varies         |

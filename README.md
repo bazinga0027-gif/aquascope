@@ -36,7 +36,7 @@
 
 ---
 
-AquaScope unifies **29 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Validated against the CAMELS benchmark with 1,000+ tests.
+AquaScope unifies **30 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Validated against the CAMELS benchmark with 1,000+ tests.
 
 ---
 
@@ -62,7 +62,7 @@ MCP client) `find_stations`, `get_timeseries`, `analyze_station` and `flood_freq
 
 ## ✨ What you can do
 
-- 🌊 **Pull water data** from USGS, FAO AQUASTAT, FAO WaPOR, GEMStat, EU WFD, Copernicus ERA5, France Hub'Eau, Taiwan MOENV/WRA/Civil IoT/DataGov, Japan MLIT, Korea WAMIS, India WRIS, GRDC, CAMELS-CL, OpenMeteo, UN SDG 6, US Water Quality Portal — **one unified Python API**.
+- 🌊 **Pull water data** from USGS, FAO AQUASTAT, FAO WaPOR, GEMStat, EU WFD, Copernicus ERA5, France Hub'Eau, Taiwan MOENV/WRA/Civil IoT/DataGov, Japan MLIT, Korea WAMIS, India WRIS, South Africa DWS, GRDC, CAMELS-CL, OpenMeteo, UN SDG 6, US Water Quality Portal — **one unified Python API**.
 - 📈 **Run hydrological analyses** — Bulletin 17C flood frequency (GEV / LP3 / Gumbel / non-stationary GEV / EMA), baseflow separation, rating curves, 22 hydrological signatures.
 - 🌾 **Plan agricultural water** — FAO-56 Penman-Monteith ET₀, crop water requirements for 23 crops, irrigation scheduling, soil water balance with auto-irrigation.
 - 🤖 **Ask the AI engine** — describe your goal in plain English and get a recommended methodology, scored against your dataset profile and auto-executed. LLM enhancement via OpenAI, Groq (free), HuggingFace (free), or local Ollama.
@@ -80,7 +80,7 @@ For the full capability list see [docs/features.md](docs/features.md).
 | Non-stationary GEV | ✅ | — | partial | — |
 | Baseflow separation (Lyne-Hollick, Eckhardt) | ✅ | — | — | — |
 | FAO-56 Penman-Monteith ET₀ + crop water | ✅ | — | — | — |
-| 29 unified data collectors | ✅ | — | — | per-source |
+| 30 unified data collectors | ✅ | — | — | per-source |
 | AI methodology recommender (OpenAI / Groq / HF / Ollama) | ✅ | — | — | — |
 | Interactive Streamlit dashboard | ✅ | — | — | — |
 | Free, MIT, Python-native | ✅ | partial | ✅ | varies |
@@ -147,7 +147,7 @@ print(sig.flashiness_index)    # Richards-Baker flashiness index
 
 22 signatures across magnitude, variability, timing, recession, and flashiness — see [docs/features.md](docs/features.md#hydrological-analysis).
 
-### 3. Collect data from any of the 29 sources
+### 3. Collect data from any of the 30 sources
 
 ```python
 from aquascope import find_stations
@@ -313,11 +313,12 @@ Run `aquascope --help` for the full command list.
 
 ## 🌍 Data sources at a glance
 
-29 data collectors spanning four regions (highlights below, full list in the [docs](docs/data_sources.md)):
+30 data collectors spanning five regions (highlights below, full list in the [docs](docs/data_sources.md)):
 
 - 🌎 **Americas** — USGS (streamflow + WQ), NOAA NWPS (US streamflow), Water Quality Portal (400+ agencies), CAMELS-CL (Chile), CAMELS-BR (Brazil)
 - 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau, Germany PEGELONLINE, England's Environment Agency
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / Civil IoT / DataGov, Japan MLIT, Korea WAMIS, India WRIS
+- 🌍 **Africa** — South Africa DWS Verified Hydrology (river discharge + water level)
 - 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR, GRDC (river discharge)
 
 Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/data_sources.md). Want to add your country's water service? See [adding a data source](docs/guides/adding_data_source.md).
@@ -338,7 +339,7 @@ Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/d
 | Resource | What it covers |
 | :--- | :--- |
 | [Features](docs/features.md) | Full capability list — hydrology, agriculture, ML, spatial, I/O |
-| [Data sources](docs/data_sources.md) | All 29 sources, endpoints, API-key requirements |
+| [Data sources](docs/data_sources.md) | All 30 sources, endpoints, API-key requirements |
 | [Theory guide](docs/theory.md) | Equations, DOI citations, decision trees for every method |
 | [Methodology matrix](docs/methodology_matrix.md) | When to use which method |
 | [Architecture](docs/guides/architecture.md) | How AquaScope is structured internally |
