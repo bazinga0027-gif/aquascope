@@ -1,0 +1,401 @@
+name: Issue 20 final governed validation
+
+on:
+  push:
+    branches:
+      - validation/issue-20-final-20260907
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  BASE_SHA: fc9b489e58923c84234b2174518888c16658a1a3
+
+jobs:
+  verify:
+    name: verify-final (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - name: Check out validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Materialise final ordinary review tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/issue20_apply_patch.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/test_docs_counts.py")
+          text = path.read_text(encoding="utf-8")
+          old = 'r"(\\d+) data collectors spanning four regions",'
+          new = 'r"(\\d+) data collectors spanning five regions",'
+          if text.count(old) != 1:
+              raise RuntimeError(
+                  "collector region-count test anchor did not match exactly once"
+              )
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+          python .github/issue20_empty_pre_patch.py
+          rm -f \
+            .github/issue20_apply_patch.py \
+            .github/issue20_dws_section.md \
+            .github/issue20_empty_pre_patch.py \
+            .github/workflows/issue20-final-validation.yml
+          git diff --check
+
+      - name: Install development and build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,all]" build
+
+      - name: Format only wholly new Python files
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            aquascope/collectors/south_africa_dws.py
+            tests/test_cli/test_south_africa_dws_collect.py
+            tests/test_collectors/test_south_africa_dws.py
+          )
+          ruff check --fix "${files[@]}"
+          ruff format "${files[@]}"
+          git diff --check
+
+      - name: Enforce review and authority boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/expected-files <<'EOF'
+          CHANGELOG.md
+          README.md
+          ROADMAP.md
+          aquascope/cli.py
+          aquascope/collectors/__init__.py
+          aquascope/collectors/south_africa_dws.py
+          aquascope/dashboard/views/collect.py
+          aquascope/registry.py
+          aquascope/schemas/water_data.py
+          docs/data_sources.md
+          docs/index.md
+          tests/test_cli/test_dashboard_required_fields.py
+          tests/test_cli/test_south_africa_dws_collect.py
+          tests/test_collectors/test_south_africa_dws.py
+          tests/test_docs_counts.py
+          EOF
+          sort -o /tmp/expected-files /tmp/expected-files
+          git diff --name-only "$BASE_SHA" | sort > /tmp/actual-files
+          diff -u /tmp/expected-files /tmp/actual-files
+          if git diff --name-only "$BASE_SHA" | grep -q '^\.github/'; then
+            echo "::error::Temporary .github machinery remains in candidate tree"
+            exit 1
+          fi
+          if git grep -n '\[a-z\]\+ regions' -- tests/test_docs_counts.py; then
+            echo "::error::Region-count assertion was weakened"
+            exit 1
+          fi
+          grep -F 'r"(\d+) data collectors spanning five regions"' tests/test_docs_counts.py
+          python - <<'PY'
+          import subprocess
+
+          limits = {
+              "CHANGELOG.md": 8,
+              "README.md": 30,
+              "ROADMAP.md": 6,
+              "aquascope/cli.py": 45,
+              "aquascope/collectors/__init__.py": 6,
+              "aquascope/dashboard/views/collect.py": 55,
+              "aquascope/registry.py": 35,
+              "aquascope/schemas/water_data.py": 5,
+              "docs/data_sources.md": 80,
+              "docs/index.md": 15,
+              "tests/test_cli/test_dashboard_required_fields.py": 15,
+              "tests/test_docs_counts.py": 5,
+          }
+          output = subprocess.check_output(
+              ["git", "diff", "--numstat", "fc9b489e58923c84234b2174518888c16658a1a3"],
+              text=True,
+          )
+          for line in output.splitlines():
+              added, deleted, path = line.split("\t", 2)
+              if path not in limits:
+                  continue
+              changed = int(added) + int(deleted)
+              if changed > limits[path]:
+                  raise SystemExit(
+                      f"non-minimal diff in {path}: {changed} changed lines exceeds {limits[path]}"
+                  )
+          PY
+          git diff --check "$BASE_SHA"
+
+      - name: Ruff lint
+        run: ruff check aquascope/ tests/
+
+      - name: Scoped type proof
+        if: matrix.python-version == '3.12'
+        run: mypy aquascope/collectors/south_africa_dws.py --follow-imports=skip --ignore-missing-imports
+
+      - name: Targeted issue-20 proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/issue20-final-proof
+          pytest \
+            tests/test_collectors/test_south_africa_dws.py \
+            tests/test_cli/test_south_africa_dws_collect.py \
+            tests/test_cli/test_dashboard_required_fields.py \
+            tests/test_cli/test_dashboard_sources.py \
+            tests/test_registry.py \
+            tests/test_docs_counts.py \
+            | tee /tmp/issue20-final-proof/pytest-targeted-${{ matrix.python-version }}.txt
+
+      - name: Full repository proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/issue20-final-proof
+          pytest --cov=aquascope --cov-report=term-missing --cov-report=xml \
+            | tee /tmp/issue20-final-proof/pytest-full-${{ matrix.python-version }}.txt
+
+      - name: Build and clean-wheel proof
+        if: matrix.python-version == '3.12'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m build | tee /tmp/issue20-final-proof/build-${{ matrix.python-version }}.txt
+          python -m venv /tmp/aquascope-issue20-final-wheel
+          /tmp/aquascope-issue20-final-wheel/bin/python -m pip install --upgrade pip
+          /tmp/aquascope-issue20-final-wheel/bin/python -m pip install dist/*.whl
+          /tmp/aquascope-issue20-final-wheel/bin/python - <<'PY' \
+            | tee /tmp/issue20-final-proof/clean-wheel-import-${{ matrix.python-version }}.txt
+          from aquascope.collectors import SouthAfricaDWSCollector
+          from aquascope.registry import SOURCES, build_collector
+          from aquascope.schemas.water_data import DataSource
+
+          assert DataSource.SOUTH_AFRICA_DWS.value == "south_africa_dws"
+          assert "south_africa_dws" in SOURCES
+          assert isinstance(
+              build_collector("south_africa_dws"), SouthAfricaDWSCollector
+          )
+          print("Clean wheel import and registry construction passed.")
+          PY
+
+      - name: Capture candidate evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p /tmp/issue20-final-proof
+          git status --short > /tmp/issue20-final-proof/git-status-${{ matrix.python-version }}.txt
+          git diff --name-status "$BASE_SHA" > /tmp/issue20-final-proof/changed-files-${{ matrix.python-version }}.txt
+          git diff --numstat "$BASE_SHA" > /tmp/issue20-final-proof/numstat-${{ matrix.python-version }}.txt
+          git diff --stat "$BASE_SHA" > /tmp/issue20-final-proof/diffstat-${{ matrix.python-version }}.txt
+          git diff "$BASE_SHA" > /tmp/issue20-final-proof/candidate-${{ matrix.python-version }}.patch
+          python --version > /tmp/issue20-final-proof/python-${{ matrix.python-version }}.txt
+          python -m pip freeze > /tmp/issue20-final-proof/pip-freeze-${{ matrix.python-version }}.txt
+          printf '%s\n' "$BASE_SHA" > /tmp/issue20-final-proof/base-sha.txt
+
+      - name: Upload candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue20-final-proof-python-${{ matrix.python-version }}
+          path: /tmp/issue20-final-proof
+          if-no-files-found: error
+
+  seal:
+    name: seal exact tested ordinary source tree
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Materialise exact final tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/issue20_apply_patch.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/test_docs_counts.py")
+          text = path.read_text(encoding="utf-8")
+          old = 'r"(\\d+) data collectors spanning four regions",'
+          new = 'r"(\\d+) data collectors spanning five regions",'
+          if text.count(old) != 1:
+              raise RuntimeError(
+                  "collector region-count test anchor did not match exactly once"
+              )
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+          python .github/issue20_empty_pre_patch.py
+          rm -f \
+            .github/issue20_apply_patch.py \
+            .github/issue20_dws_section.md \
+            .github/issue20_empty_pre_patch.py \
+            .github/workflows/issue20-final-validation.yml
+
+      - name: Install development and build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,all]" build
+
+      - name: Normalise new files and lint exact tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            aquascope/collectors/south_africa_dws.py
+            tests/test_cli/test_south_africa_dws_collect.py
+            tests/test_collectors/test_south_africa_dws.py
+          )
+          ruff check --fix "${files[@]}"
+          ruff format "${files[@]}"
+          ruff check aquascope/ tests/
+          mypy aquascope/collectors/south_africa_dws.py --follow-imports=skip --ignore-missing-imports
+          git diff --check
+
+      - name: Reprove exact tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/issue20-final-proof
+          pytest \
+            tests/test_collectors/test_south_africa_dws.py \
+            tests/test_cli/test_south_africa_dws_collect.py \
+            tests/test_cli/test_dashboard_required_fields.py \
+            tests/test_cli/test_dashboard_sources.py \
+            tests/test_registry.py \
+            tests/test_docs_counts.py \
+            | tee /tmp/issue20-final-proof/pytest-targeted-seal.txt
+          pytest --cov=aquascope --cov-report=term-missing --cov-report=xml \
+            | tee /tmp/issue20-final-proof/pytest-full-seal.txt
+          python -m build | tee /tmp/issue20-final-proof/build-seal.txt
+          python -m venv /tmp/aquascope-issue20-seal-wheel
+          /tmp/aquascope-issue20-seal-wheel/bin/python -m pip install --upgrade pip
+          /tmp/aquascope-issue20-seal-wheel/bin/python -m pip install dist/*.whl
+          /tmp/aquascope-issue20-seal-wheel/bin/python - <<'PY' \
+            | tee /tmp/issue20-final-proof/clean-wheel-import-seal.txt
+          from aquascope.collectors import SouthAfricaDWSCollector
+          from aquascope.registry import SOURCES, build_collector
+          from aquascope.schemas.water_data import DataSource
+
+          assert DataSource.SOUTH_AFRICA_DWS.value == "south_africa_dws"
+          assert "south_africa_dws" in SOURCES
+          assert isinstance(
+              build_collector("south_africa_dws"), SouthAfricaDWSCollector
+          )
+          print("Clean wheel import and registry construction passed.")
+          PY
+
+      - name: Enforce exact final boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/expected-files <<'EOF'
+          CHANGELOG.md
+          README.md
+          ROADMAP.md
+          aquascope/cli.py
+          aquascope/collectors/__init__.py
+          aquascope/collectors/south_africa_dws.py
+          aquascope/dashboard/views/collect.py
+          aquascope/registry.py
+          aquascope/schemas/water_data.py
+          docs/data_sources.md
+          docs/index.md
+          tests/test_cli/test_dashboard_required_fields.py
+          tests/test_cli/test_south_africa_dws_collect.py
+          tests/test_collectors/test_south_africa_dws.py
+          tests/test_docs_counts.py
+          EOF
+          sort -o /tmp/expected-files /tmp/expected-files
+          git diff --name-only "$BASE_SHA" | sort > /tmp/actual-files
+          diff -u /tmp/expected-files /tmp/actual-files
+          if git diff --name-only "$BASE_SHA" | grep -q '^\.github/'; then
+            echo "::error::Temporary .github machinery remains in final tree"
+            exit 1
+          fi
+          if git grep -n '\[a-z\]\+ regions' -- tests/test_docs_counts.py; then
+            echo "::error::Region-count assertion was weakened"
+            exit 1
+          fi
+          grep -F 'r"(\d+) data collectors spanning five regions"' tests/test_docs_counts.py
+          git diff --check "$BASE_SHA"
+
+      - name: Commit and prove tree identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "bazinga0027-gif"
+          git config user.email "241781992+bazinga0027-gif@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          tested_tree=$(git write-tree)
+          printf '%s\n' "$tested_tree" | tee /tmp/issue20-final-proof/tested-tree-sha.txt
+          git commit \
+            --author="bazinga0027-gif <241781992+bazinga0027-gif@users.noreply.github.com>" \
+            -m "feat(collectors): add South Africa DWS hydrology collector (#20)"
+          committed_tree=$(git rev-parse HEAD^{tree})
+          test "$committed_tree" = "$tested_tree"
+          git rev-parse HEAD | tee /tmp/issue20-final-proof/validation-commit-sha.txt
+          printf '%s\n' "$committed_tree" | tee /tmp/issue20-final-proof/committed-tree-sha.txt
+          git show --stat --oneline HEAD | tee /tmp/issue20-final-proof/validation-commit-stat.txt
+          git show --format=fuller --no-ext-diff HEAD > /tmp/issue20-final-proof/validation-commit.patch
+          test -z "$(git status --porcelain)"
+          git ls-tree -r --name-only HEAD | grep -E '(^|/)issue20_' && {
+            echo "::error::Temporary issue20 helper survived the seal"
+            exit 1
+          } || true
+          git push origin HEAD:validation/issue-20-final-20260907
+
+      - name: Capture final hashes
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p /tmp/issue20-final-proof
+          git rev-parse HEAD > /tmp/issue20-final-proof/head-sha.txt
+          git rev-parse HEAD^{tree} > /tmp/issue20-final-proof/tree-sha.txt
+          git diff-tree --no-commit-id --name-status -r HEAD > /tmp/issue20-final-proof/commit-files.txt
+          git diff --name-status "$BASE_SHA" > /tmp/issue20-final-proof/final-changed-files.txt
+          git diff --numstat "$BASE_SHA" > /tmp/issue20-final-proof/final-numstat.txt
+          git diff --stat "$BASE_SHA" > /tmp/issue20-final-proof/final-diffstat.txt
+          git diff "$BASE_SHA" > /tmp/issue20-final-proof/final.patch
+          while read -r path; do
+            [ -f "$path" ] && sha256sum "$path"
+          done < <(git diff --name-only "$BASE_SHA") \
+            > /tmp/issue20-final-proof/SHA256SUMS
+          git status --porcelain > /tmp/issue20-final-proof/final-git-status.txt
+
+      - name: Upload final sealed-tree evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue20-final-sealed-proof
+          path: /tmp/issue20-final-proof
+          if-no-files-found: error
