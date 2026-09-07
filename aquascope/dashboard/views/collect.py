@@ -39,6 +39,7 @@ _API_KEY_SOURCES: dict[str, tuple[str, str]] = {
 _REQUIRED_FETCH_FIELDS: dict[str, dict[str, str]] = {
     "pegelonline": {"station_id": "Station UUID"},
     "bom": {"station_id": "AWRC station number"},
+    "south_africa_dws": {"station_id": "DWS station code"},
 }
 
 # Sources needing at least one of several fields, rather than all of them.
@@ -85,6 +86,7 @@ _REGION_ORDER = [
     "Japan",
     "South Korea",
     "India",
+    "South Africa",
     "Africa & Near East",
 ]
 
@@ -614,6 +616,30 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
                 fetch["bbox"] = tuple(float(x) for x in bbox_str.split(","))
             except ValueError:
                 st.warning("Bounding box must be four comma-separated numbers.")
+
+    elif source_key == "south_africa_dws":
+        st.caption(
+            "DWS Verified Hydrology — daily mean discharge or point water level. "
+            "Leave both dates blank for the most recent 30 days."
+        )
+        station = st.text_input("DWS station code", placeholder="e.g. C1H001")
+        if station.strip():
+            fetch["station_id"] = station.strip()
+        fetch["variable"] = st.selectbox(
+            "Variable",
+            ["discharge", "water_level"],
+            format_func=lambda value: {
+                "discharge": "Daily mean discharge (m³/s)",
+                "water_level": "Point water level (m)",
+            }[value],
+        )
+        c1, c2 = st.columns(2)
+        sd = c1.date_input("Start date (optional)", value=None, key="dws_start")
+        ed = c2.date_input("End date (optional)", value=None, key="dws_end")
+        if sd:
+            fetch["start_date"] = str(sd)
+        if ed:
+            fetch["end_date"] = str(ed)
 
     elif source_key == "noaa_nwps":
         st.caption("NOAA National Water Prediction Service — fetch by 5-char station LID or bounding box.")

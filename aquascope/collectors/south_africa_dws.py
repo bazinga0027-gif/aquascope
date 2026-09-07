@@ -141,11 +141,7 @@ class SouthAfricaDWSCollector(BaseCollector):
                 use_cache=use_cache,
             )
             parsed = self._parse_response(body, station_id=station, variable=variable)
-            rows.extend(
-                row
-                for row in parsed
-                if chunk_start <= row["reading_datetime"].date() <= chunk_end
-            )
+            rows.extend(row for row in parsed if chunk_start <= row["reading_datetime"].date() <= chunk_end)
 
         # Calendar chunks should not overlap. Keep identical duplicates but
         # reject conflicting values rather than silently choosing one.
@@ -154,16 +150,11 @@ class SouthAfricaDWSCollector(BaseCollector):
             key = row["reading_datetime"]
             previous = unique.get(key)
             if previous is not None and previous != row:
-                raise ValueError(
-                    "DWS returned conflicting observations for "
-                    f"{station} at {key.isoformat()}."
-                )
+                raise ValueError(f"DWS returned conflicting observations for {station} at {key.isoformat()}.")
             unique[key] = row
         return [unique[key] for key in sorted(unique)]
 
-    def normalise(
-        self, raw: list[dict[str, Any]]
-    ) -> Sequence[StreamflowReading | WaterLevelReading]:
+    def normalise(self, raw: list[dict[str, Any]]) -> Sequence[StreamflowReading | WaterLevelReading]:
         records: list[StreamflowReading | WaterLevelReading] = []
         for row in raw:
             try:
@@ -211,18 +202,12 @@ class SouthAfricaDWSCollector(BaseCollector):
     @staticmethod
     def _normalise_station_id(station_id: str) -> str:
         if not isinstance(station_id, str):
-            raise ValueError(
-                "DWS station_id must be a 4-12 character alphanumeric agency code, "
-                "for example 'C1H001'."
-            )
+            raise ValueError("DWS station_id must be a 4-12 character alphanumeric agency code, for example 'C1H001'.")
         station = station_id.strip().upper()
         if station.endswith(DWS_SERIES_SUFFIX):
             station = station[: -len(DWS_SERIES_SUFFIX)]
         if not _STATION_RE.fullmatch(station):
-            raise ValueError(
-                "DWS station_id must be a 4-12 character alphanumeric agency code, "
-                "for example 'C1H001'."
-            )
+            raise ValueError("DWS station_id must be a 4-12 character alphanumeric agency code, for example 'C1H001'.")
         return station
 
     @classmethod
@@ -272,9 +257,7 @@ class SouthAfricaDWSCollector(BaseCollector):
             current = chunk_end + timedelta(days=1)
 
     @classmethod
-    def _parse_response(
-        cls, body: str, *, station_id: str, variable: str
-    ) -> list[dict[str, Any]]:
+    def _parse_response(cls, body: str, *, station_id: str, variable: str) -> list[dict[str, Any]]:
         table = cls._extract_table(body)
         if not table:
             return []
@@ -307,8 +290,7 @@ class SouthAfricaDWSCollector(BaseCollector):
             return body.strip()
         preview = re.sub(r"\s+", " ", body).strip()[:200]
         raise ValueError(
-            "DWS response did not contain the expected <pre> hydrology table. "
-            f"Response preview: {preview!r}"
+            f"DWS response did not contain the expected <pre> hydrology table. Response preview: {preview!r}"
         )
 
     @classmethod
@@ -316,8 +298,7 @@ class SouthAfricaDWSCollector(BaseCollector):
         header, lines = cls._header_and_data_lines(table)
         if header[:2] != ["DATE", "D_AVG_FR"]:
             raise ValueError(
-                "DWS daily table has an unexpected header; expected DATE D_AVG_FR, "
-                f"got {' '.join(header)!r}."
+                f"DWS daily table has an unexpected header; expected DATE D_AVG_FR, got {' '.join(header)!r}."
             )
 
         rows: list[dict[str, Any]] = []
@@ -349,8 +330,7 @@ class SouthAfricaDWSCollector(BaseCollector):
         header, lines = cls._header_and_data_lines(table)
         if header[:3] != ["DATE", "TIME", "COR_LEVEL"]:
             raise ValueError(
-                "DWS point table has an unexpected header; expected DATE TIME COR_LEVEL, "
-                f"got {' '.join(header)!r}."
+                f"DWS point table has an unexpected header; expected DATE TIME COR_LEVEL, got {' '.join(header)!r}."
             )
 
         rows: list[dict[str, Any]] = []
@@ -362,9 +342,7 @@ class SouthAfricaDWSCollector(BaseCollector):
             if value is None:
                 continue
             try:
-                reading_datetime = datetime.combine(
-                    cls._parse_yyyymmdd(tokens[0]), cls._parse_time(tokens[1])
-                )
+                reading_datetime = datetime.combine(cls._parse_yyyymmdd(tokens[0]), cls._parse_time(tokens[1]))
             except ValueError as exc:
                 logger.debug("Skipping malformed DWS point row: %s — %r", exc, line)
                 continue

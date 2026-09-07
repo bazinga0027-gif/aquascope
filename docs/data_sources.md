@@ -1,6 +1,6 @@
 # Data Sources
 
-AquaScope ships **29 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
+AquaScope ships **30 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
 
 Most sources emit point observations and share the unified `water_data` schema (`WaterQualitySample`, `WaterLevelReading`, `ReservoirStatus`). Three aggregate/gridded sources use purpose-built record types that match their data shape: **FAO AQUASTAT** returns country-level `AquastatRecord`, **UN SDG 6** returns `SDG6Indicator`, and **FAO WaPOR** returns gridded `WaPORObservation`.
 
@@ -35,6 +35,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [Japan MLIT](https://www.mlit.go.jp) | Japan | Hydrometeorology, river observations | REST | ✅ |
 | [Korea WAMIS](https://www.wamis.go.kr) | Korea | Hydrology, dam operations | REST | ✅ |
 | [India WRIS](https://indiawris.gov.in) | India | River water level | REST | ✅ |
+| [South Africa DWS](https://www.dws.gov.za/Hydrology/) | South Africa | Verified river discharge, water level | HTML / text | ✅ |
 | [GRDC](https://zenodo.org/records/19126732) | Global | River discharge (in-situ gauges + RSEG satellite) | Zenodo / Dataverse | ✅ |
 | [CAMELS-CL](https://www.cr2.cl/camels-cl/) | Chile | Daily observed streamflow, catchment attributes | ZIP / CSV | ✅ |
 | [CAMELS-BR](https://doi.org/10.5281/zenodo.3709337) | Brazil | Daily observed streamflow, catchment attributes | ZIP / CSV | ✅ |
@@ -62,6 +63,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | Hub'Eau | No | Open access |
 | PEGELONLINE | No | Open access |
 | Japan MLIT / Korea WAMIS | No | Open access |
+| South Africa DWS | No | Open access; provider backend availability varies |
 | CAMELS-CL | No | Open access |
 | CAMELS-BR | No | Open access via Zenodo |
 | Ireland OPW | No | Open access via waterlevel.ie |
@@ -73,6 +75,56 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 ## Adding a new source
 
 Want to add your country's water data? See the contributor guide: [adding a data source](guides/adding_data_source.md).
+
+## South Africa DWS Verified Hydrology
+
+- **Source type:** `south_africa_dws`
+- **Coverage:** South African river gauges — verified daily mean discharge and point water level
+- **Collector:** `aquascope.collectors.south_africa_dws.SouthAfricaDWSCollector`
+- **Authentication:** None
+
+DWS stations are addressed by the agency gauge code, for example `C1H001`.
+The collector calls the deterministic `Verified/HyData.aspx` interface and
+normalises daily mean discharge (`D_AVG_FR`) to `StreamflowReading` and point
+water level (`COR_LEVEL`) to `WaterLevelReading`.
+
+```python
+from aquascope.collectors import SouthAfricaDWSCollector
+
+collector = SouthAfricaDWSCollector()
+flow = collector.collect(
+    station_id="C1H001",
+    variable="discharge",
+    start_date="2026-01-20",
+    end_date="2026-01-21",
+)
+levels = collector.collect(
+    station_id="C1H001",
+    variable="water_level",
+    days=7,
+)
+```
+
+From the CLI:
+
+```bash
+aquascope collect --source south_africa_dws --station C1H001 \
+  --variable discharge --start-date 2026-01-20 --end-date 2026-01-21
+
+aquascope collect --source south_africa_dws --station C1H001 \
+  --variable water_level --days 7
+```
+
+**Provider availability boundary:** DWS can return an application-level
+Kisters `ScriptServerODBC` failure inside an HTTP 200 response. The collector
+checks the body and raises a clear `RuntimeError`; it never interprets that
+error page as valid hydrological data. Caching is therefore disabled by
+default for this collector. A successful live collection still depends on the
+DWS/Kisters backend being healthy.
+
+DWS reuse terms have not yet been verified, so the registry marks this source
+as non-redistributable. AquaScope can collect it directly, but the open archive
+must not mirror the observations until the terms are established.
 
 ## PEGELONLINE (Germany)
 
