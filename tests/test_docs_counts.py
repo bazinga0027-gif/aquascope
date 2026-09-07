@@ -18,7 +18,7 @@ README_PATTERNS = [
     r"unifies \*\*(\d+) global water-data sources\*\*",
     r"\| (\d+) unified data collectors \|",
     r"any of the (\d+) sources",
-    r"(\d+) data collectors spanning four regions",
+    r"(\d+) data collectors spanning five regions",
     r"All (\d+) sources",
 ]
 
@@ -47,8 +47,7 @@ def test_readme_counts_match_table():
         match = re.search(pattern, text)
         assert match is not None, f"README no longer contains the phrase for {pattern!r}"
         assert int(match.group(1)) == expected, (
-            f"README says {match.group(1)} for {pattern!r} but the "
-            f"docs/data_sources.md table has {expected} rows"
+            f"README says {match.group(1)} for {pattern!r} but the docs/data_sources.md table has {expected} rows"
         )
 
 
@@ -60,7 +59,4 @@ def test_readme_cli_count_matches_cli():
 
     expected = _cli_command_count()
 
-    assert int(match.group(1)) == expected, (
-        f"README says {match.group(1)} CLI commands but "
-        f"cli.py defines {expected}"
-    )
+    assert int(match.group(1)) == expected, f"README says {match.group(1)} CLI commands but cli.py defines {expected}"

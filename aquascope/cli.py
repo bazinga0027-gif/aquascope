@@ -259,6 +259,18 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["start"] = args.start_date
         if args.end_date:
             kwargs["end"] = args.end_date
+    if source == "south_africa_dws":
+        if not args.station:
+            logger.error("South Africa DWS requires --station with a DWS gauge code, e.g. C1H001.")
+            sys.exit(1)
+        kwargs["station_id"] = args.station
+        kwargs["variable"] = args.variable or "discharge"
+        if args.days is not None:
+            kwargs["days"] = args.days
+        if args.start_date:
+            kwargs["start_date"] = args.start_date
+        if args.end_date:
+            kwargs["end_date"] = args.end_date
     if source == "ireland_opw" and args.max_stations:
         kwargs["max_stations"] = args.max_stations
     if source == "bom":
@@ -829,8 +841,10 @@ def cmd_playbooks(args: argparse.Namespace) -> None:
             print(f"  {r['id']:<22} (broken: {r['error']})")
             continue
         print(f"  {r['id']:<22} {r['title']}  (branches: {', '.join(r['branches'])})")
-    print(f"\n  {len(rows)} playbook(s); `aquascope playbooks show ID` prints one, "
-          "`aquascope solve \"PROBLEM\" --lat LAT --lon LON` runs one.")
+    print(
+        f"\n  {len(rows)} playbook(s); `aquascope playbooks show ID` prints one, "
+        '`aquascope solve "PROBLEM" --lat LAT --lon LON` runs one.'
+    )
 
 
 def cmd_ingest(args: argparse.Namespace) -> None:
@@ -1025,8 +1039,10 @@ def _format_assessment(res: dict, *, radius_km: float) -> str:
     catch = res.get("catchment") or {}
     stations = res.get("stations") or []
     rows = res.get("sufficiency") or []
-    head = [f"{res['point']['lat']:.4f}, {res['point']['lon']:.4f}",
-            f"{len(stations)} gauge{'' if len(stations) == 1 else 's'} within {radius_km:g} km"]
+    head = [
+        f"{res['point']['lat']:.4f}, {res['point']['lon']:.4f}",
+        f"{len(stations)} gauge{'' if len(stations) == 1 else 's'} within {radius_km:g} km",
+    ]
     area = ctx.get("area_km2")
     if area:
         head.append(f"catchment {area:,.0f} km²" + (" (caller)" if catch.get("source") == "caller" else ""))
@@ -1061,8 +1077,9 @@ def cmd_assess(args: argparse.Namespace) -> None:
     """`aquascope assess LAT LON`: what can be answered at a place, from the catalog and BasinATLAS, no agency call."""
     from aquascope.explore import assess_site
 
-    res = assess_site(args.lat, args.lon, radius_km=args.radius_km, problem=args.problem,
-                      return_period=args.return_period)
+    res = assess_site(
+        args.lat, args.lon, radius_km=args.radius_km, problem=args.problem, return_period=args.return_period
+    )
     if args.json:
         print(json.dumps(res, indent=2, ensure_ascii=False))
         return
@@ -1086,9 +1103,13 @@ def cmd_gym(args: argparse.Namespace) -> None:
         probes = None if args.probes == "all" else int(args.probes)
         n_probes = sum(len(gt.decline_probes(p)) for p in pbs) if probes is None else probes
         per_site = max(1, len(pbs) + n_probes)
-        sites = gt.suggest_sites(-(-args.n // per_site), seed=args.seed, sources=args.source or None,
-                                 ungauged_share=args.ungauged_share,
-                                 on_land=None if args.no_check_land else gt.on_land_basinatlas)
+        sites = gt.suggest_sites(
+            -(-args.n // per_site),
+            seed=args.seed,
+            sources=args.source or None,
+            ungauged_share=args.ungauged_share,
+            on_land=None if args.no_check_land else gt.on_land_basinatlas,
+        )
         skipped: list[dict] = []
         tasks = gt.tasks_from_playbooks(sites, pbs, probes=probes, on_event=say, skipped=skipped)[: args.n]
         gt.write_tasks(tasks, args.out)
@@ -1098,8 +1119,10 @@ def cmd_gym(args: argparse.Namespace) -> None:
         print(f"  {len(tasks)} tasks from {n_sites} sites ({hard} unsolvable, {test} held out as test) -> {args.out}")
         if skipped:
             sites_lost = sum(1 for e in skipped if "playbook" not in e)
-            print(f"  skipped: {sites_lost} of {len(sites)} sites (reconnaissance unavailable), "
-                  f"{len(skipped) - sites_lost} tasks (no key):")
+            print(
+                f"  skipped: {sites_lost} of {len(sites)} sites (reconnaissance unavailable), "
+                f"{len(skipped) - sites_lost} tasks (no key):"
+            )
             for entry in skipped:
                 what = f" {entry['playbook']}" if entry.get("playbook") else ""
                 print(f"    {gt.site_key(entry['site'])}{what}: {entry['error'][:100]}")
@@ -1115,10 +1138,22 @@ def cmd_gym(args: argparse.Namespace) -> None:
         from aquascope.gym import bench as gb
 
         results = gb.run_bench(
-            args.tasks, args.agent, provider=args.provider, model=args.model, api_key=args.api_key,
-            base_url=args.base_url, limit=args.limit, unsolvable=args.unsolvable, task_ids=args.task or None,
-            timeout=args.timeout or None, out=args.out, max_steps=args.max_steps, context_chars=args.context_chars,
-            on_event=say, spread=args.spread, resume=args.resume,
+            args.tasks,
+            args.agent,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            limit=args.limit,
+            unsolvable=args.unsolvable,
+            task_ids=args.task or None,
+            timeout=args.timeout or None,
+            out=args.out,
+            max_steps=args.max_steps,
+            context_chars=args.context_chars,
+            on_event=say,
+            spread=args.spread,
+            resume=args.resume,
         )
         if args.json:
             print(json.dumps(gb.summarize(results), indent=2, default=str))
@@ -1349,9 +1384,17 @@ def cmd_solve_team(args: argparse.Namespace) -> None:
 
     try:
         result = solve(
-            args.query, lat=args.lat, lon=args.lon, playbook=args.playbook, intake=intake,
-            provider=args.provider, model=args.model, api_key=args.api_key, base_url=args.base_url,
-            review=review, on_event=on_event,
+            args.query,
+            lat=args.lat,
+            lon=args.lon,
+            playbook=args.playbook,
+            intake=intake,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            review=review,
+            on_event=on_event,
         )
     except (RuntimeError, ValueError, ImportError) as exc:
         logger.error("%s", exc)
@@ -1432,8 +1475,18 @@ def cmd_studio(args: argparse.Namespace) -> None:
             print(f"  · {_format_event(event)}", file=sys.stderr)
 
     try:
-        studio = Studio(args.lat, args.lon, provider=args.provider, model=args.model, api_key=args.api_key,
-                        base_url=args.base_url, data=data, on_event=on_event, workspace=workspace, intake=intake)
+        studio = Studio(
+            args.lat,
+            args.lon,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            data=data,
+            on_event=on_event,
+            workspace=workspace,
+            intake=intake,
+        )
     except (RuntimeError, ValueError, ImportError) as exc:
         logger.error("%s", exc)
         sys.exit(1)
@@ -2071,7 +2124,10 @@ def main() -> None:
     )
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")
     p_collect.add_argument(
-        "--days", type=int, default=None, help="Number of days (USGS/UKEA/PEGELONLINE/BOM; PEGELONLINE max: 31)"
+        "--days",
+        type=int,
+        default=None,
+        help="Number of days (USGS/UKEA/PEGELONLINE/BOM/South Africa DWS; PEGELONLINE max: 31)",
     )
     p_collect.add_argument(
         "--parameter-type",
@@ -2096,12 +2152,24 @@ def main() -> None:
     p_collect.add_argument(
         "--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood; grdc: in_situ/satellite)"
     )
-    p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
+    p_collect.add_argument(
+        "--variable",
+        default=None,
+        help="Variable code (WaPOR), or discharge/water_level (South Africa DWS)",
+    )
     p_collect.add_argument("--lid", default=None, help="A unique 5-character alphanumeric code e.g. ANAW1 (NOAA_NWPS)")
     p_collect.add_argument("--lat", type=float, default=None, help="Latitude (openmeteo/copernicus)")
     p_collect.add_argument("--lon", type=float, default=None, help="Longitude (openmeteo/copernicus)")
-    p_collect.add_argument("--start-date", default=None, help="Start date YYYY-MM-DD (openmeteo/copernicus/UKEA/BOM)")
-    p_collect.add_argument("--end-date", default=None, help="End date YYYY-MM-DD (openmeteo/copernicus/UKEA/BOM)")
+    p_collect.add_argument(
+        "--start-date",
+        default=None,
+        help="Start date YYYY-MM-DD (openmeteo/copernicus/UKEA/BOM/South Africa DWS)",
+    )
+    p_collect.add_argument(
+        "--end-date",
+        default=None,
+        help="End date YYYY-MM-DD (openmeteo/copernicus/UKEA/BOM/South Africa DWS)",
+    )
     p_collect.add_argument("--start-year", type=int, default=2000, help="Start year (AQUASTAT)")
     p_collect.add_argument("--end-year", type=int, default=2023, help="End year (AQUASTAT)")
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")
@@ -2110,7 +2178,9 @@ def main() -> None:
         "--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl, camels_br)"
     )
     p_collect.add_argument(
-        "--station", default=None, help="Station UUID/SUID (PEGELONLINE/UKEA), or AWRC station number (BOM)"
+        "--station",
+        default=None,
+        help="Station UUID/SUID (PEGELONLINE/UKEA), AWRC number (BOM), or DWS gauge code",
     )
     p_collect.add_argument("--station-id", default=None, help="USGS monitoring station identifier")
     p_collect.add_argument("--parameter", default=None, help="USGS parameter code, e.g. 00060 for discharge")
@@ -2234,7 +2304,9 @@ def main() -> None:
         help="bundles: restrict to these variables (repeatable)",
     )
     p_harvest.add_argument(
-        "--years", type=int, default=None,
+        "--years",
+        type=int,
+        default=None,
         help="obs: cap the record asked for, in years (default: the full record, from the catalog's first date)",
     )
     p_harvest.add_argument("--max-stations", type=int, default=100, help="obs: stations per source per run")
@@ -2351,8 +2423,12 @@ def main() -> None:
     )
     p_assess.add_argument("lat", type=float)
     p_assess.add_argument("lon", type=float, help="Longitude (a negative value is fine as a positional)")
-    p_assess.add_argument("--problem", choices=sorted({p for m in _METHODS.values() for p in m.problems}), default=None,
-                          help="Only the methods for this problem kind")
+    p_assess.add_argument(
+        "--problem",
+        choices=sorted({p for m in _METHODS.values() for p in m.problems}),
+        default=None,
+        help="Only the methods for this problem kind",
+    )
     p_assess.add_argument("--radius-km", type=float, default=50.0, help="How far a gauge may be to count (default 50)")
     p_assess.add_argument("--return-period", type=float, default=None, help="The T (years) the question asks for")
     p_assess.add_argument("--json", action="store_true")
@@ -2386,37 +2462,57 @@ def main() -> None:
         p_g.add_argument("--out", default=None, help="leaderboard: write the table (CSV; Markdown for bench results)")
         p_g.add_argument("--json", action="store_true")
     p_g_lb = gym_sub.choices["leaderboard"]
-    p_g_lb.add_argument("results", nargs="*", metavar="RESULTS.jsonl",
-                        help="Bench result files (Phase 1): render their leaderboard instead of playing the baselines")
+    p_g_lb.add_argument(
+        "results",
+        nargs="*",
+        metavar="RESULTS.jsonl",
+        help="Bench result files (Phase 1): render their leaderboard instead of playing the baselines",
+    )
     p_g_lb.add_argument("--title", default=None, help="Heading of the Markdown leaderboard")
     p_gt = gym_sub.add_parser("tasks", help="Generate benchmark tasks from the playbooks on catalog sites (Phase 1)")
     p_gt.add_argument("--n", type=int, default=60, help="Number of tasks (default 60)")
     p_gt.add_argument("--seed", type=int, default=0)
     p_gt.add_argument("--source", action="append", help="Restrict sites to these sources (repeatable)")
     p_gt.add_argument("--playbook", action="append", help="Only these playbooks (repeatable; default all)")
-    p_gt.add_argument("--probes", default="1",
-                      help="Decline probes per site: an integer or 'all' (default 1, rotating over the rules)")
+    p_gt.add_argument(
+        "--probes",
+        default="1",
+        help="Decline probes per site: an integer or 'all' (default 1, rotating over the rules)",
+    )
     p_gt.add_argument("--ungauged-share", type=float, default=0.25, help="Share of sites that are bare points")
-    p_gt.add_argument("--no-check-land", action="store_true",
-                      help="Do not ask BasinATLAS whether a bare point is on land (offline; the gauge proxy still applies)")
+    p_gt.add_argument(
+        "--no-check-land",
+        action="store_true",
+        help="Do not ask BasinATLAS whether a bare point is on land (offline; the gauge proxy still applies)",
+    )
     p_gt.add_argument("--out", default="tasks.jsonl")
     p_gt.add_argument("--quiet", action="store_true")
     p_gbench = gym_sub.add_parser("bench", help="Play an agent on the tasks and score it against the keys (Phase 1)")
     p_gbench.add_argument("--tasks", required=True, help="tasks.jsonl from `gym tasks`")
     p_gbench.add_argument("--agent", choices=["tree", "team", "ask"], default="tree")
-    p_gbench.add_argument("--provider", default=None,
-                          help="LLM provider (anthropic, openai, groq, huggingface, ollama, ...); none: keyless team")
+    p_gbench.add_argument(
+        "--provider",
+        default=None,
+        help="LLM provider (anthropic, openai, groq, huggingface, ollama, ...); none: keyless team",
+    )
     p_gbench.add_argument("--model", default=None)
     p_gbench.add_argument("--api-key", default=None)
     p_gbench.add_argument("--base-url", default=None)
     p_gbench.add_argument("--limit", type=int, default=None, help="Play the first N tasks")
-    p_gbench.add_argument("--unsolvable", type=int, default=None,
-                          help="With --limit: at most this many unsolvable tasks among the N")
+    p_gbench.add_argument(
+        "--unsolvable", type=int, default=None, help="With --limit: at most this many unsolvable tasks among the N"
+    )
     p_gbench.add_argument("--task", action="append", help="Play these task ids only (repeatable)")
-    p_gbench.add_argument("--spread", action="store_true",
-                          help="With --limit: take tasks round robin over the sites rather than the first N")
-    p_gbench.add_argument("--resume", action="store_true",
-                          help="Skip tasks --out already holds a finished row for (errors and timeouts are replayed)")
+    p_gbench.add_argument(
+        "--spread",
+        action="store_true",
+        help="With --limit: take tasks round robin over the sites rather than the first N",
+    )
+    p_gbench.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip tasks --out already holds a finished row for (errors and timeouts are replayed)",
+    )
     p_gbench.add_argument("--timeout", type=float, default=900.0, help="Seconds per task (0: none)")
     p_gbench.add_argument("--max-steps", type=int, default=8, help="ask: tool-call steps")
     p_gbench.add_argument("--context-chars", type=int, default=40_000, help="ask: conversation budget in characters")
@@ -2473,13 +2569,23 @@ def main() -> None:
     p_solve.add_argument("--lat", type=float, default=None, help="Latitude of the site (with --lon: the team)")
     p_solve.add_argument("--lon", type=float, default=None, help="Longitude of the site")
     p_solve.add_argument("--playbook", default=None, help="Playbook id (see `aquascope playbooks`); else keyword rules")
-    p_solve.add_argument("--intake", action="append", default=[], metavar="KEY=VALUE",
-                         help="An intake field, e.g. --intake return_period=200 (repeatable)")
+    p_solve.add_argument(
+        "--intake",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="An intake field, e.g. --intake return_period=200 (repeatable)",
+    )
     p_solve.add_argument("--yes", "-y", action="store_true", help="Run the plan without asking")
-    p_solve.add_argument("--provider", choices=provider_ids(), default=None,
-                         help="Use a model for the rationale, fallbacks and prose (keyless otherwise)")
-    p_solve.add_argument("--model", default=None,
-                         help="Model name (with --lat/--lon: the LLM; otherwise the legacy forecast model)")
+    p_solve.add_argument(
+        "--provider",
+        choices=provider_ids(),
+        default=None,
+        help="Use a model for the rationale, fallbacks and prose (keyless otherwise)",
+    )
+    p_solve.add_argument(
+        "--model", default=None, help="Model name (with --lat/--lon: the LLM; otherwise the legacy forecast model)"
+    )
     p_solve.add_argument("--api-key", default=None)
     p_solve.add_argument("--base-url", default=None, help="Any OpenAI-compatible endpoint (or Anthropic's)")
     p_solve.add_argument("--out", "-o", default=None, help="Save the Markdown report here")
@@ -2496,12 +2602,26 @@ def main() -> None:
     p_studio.add_argument("query", nargs="?", default=None, help="The problem in plain language")
     p_studio.add_argument("--lat", type=float, default=None, help="Latitude of the site")
     p_studio.add_argument("--lon", type=float, default=None, help="Longitude of the site")
-    p_studio.add_argument("--data", action="append", default=[], metavar="FILE",
-                          help="A table of your own (CSV, Excel, JSON) the crew may use (repeatable)")
-    p_studio.add_argument("--intake", action="append", default=[], metavar="KEY=VALUE",
-                          help="An intake field, e.g. --intake return_period=200 (repeatable)")
-    p_studio.add_argument("--provider", choices=provider_ids(), default=None,
-                          help="Use a model for the brief, the methodology and the prose (keyless otherwise)")
+    p_studio.add_argument(
+        "--data",
+        action="append",
+        default=[],
+        metavar="FILE",
+        help="A table of your own (CSV, Excel, JSON) the crew may use (repeatable)",
+    )
+    p_studio.add_argument(
+        "--intake",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="An intake field, e.g. --intake return_period=200 (repeatable)",
+    )
+    p_studio.add_argument(
+        "--provider",
+        choices=provider_ids(),
+        default=None,
+        help="Use a model for the brief, the methodology and the prose (keyless otherwise)",
+    )
     p_studio.add_argument("--model", default=None, help="Model name")
     p_studio.add_argument("--api-key", default=None)
     p_studio.add_argument("--base-url", default=None, help="Any OpenAI-compatible endpoint (or Anthropic's)")

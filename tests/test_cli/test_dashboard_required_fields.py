@@ -38,9 +38,11 @@ def test_a_blank_string_counts_as_missing():
 
 def test_bom_without_a_station_is_caught():
     """BOMCollector.fetch_raw raises the same way; same form shape, same fix."""
-    assert missing_required_fields("bom", {"parameter_type": "Water Course Discharge"}) == [
-        "AWRC station number"
-    ]
+    assert missing_required_fields("bom", {"parameter_type": "Water Course Discharge"}) == ["AWRC station number"]
+
+
+def test_dws_without_a_station_is_caught():
+    assert missing_required_fields("south_africa_dws", {"variable": "discharge"}) == ["DWS station code"]
 
 
 @pytest.mark.parametrize(
