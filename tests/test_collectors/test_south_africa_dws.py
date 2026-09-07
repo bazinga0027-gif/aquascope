@@ -11,7 +11,6 @@ from aquascope.schemas.water_data import (
     WaterLevelReading,
 )
 
-
 DAILY_HTML = """
 <html><body><pre>
 DWS verified daily values
@@ -38,9 +37,7 @@ class FakeClient:
         self.calls: list[dict] = []
 
     def get_text(self, path, params=None, headers=None, use_cache=True):
-        self.calls.append(
-            {"path": path, "params": params, "headers": headers, "use_cache": use_cache}
-        )
+        self.calls.append({"path": path, "params": params, "headers": headers, "use_cache": use_cache})
         return self.responses.pop(0)
 
 
@@ -110,11 +107,14 @@ def test_daily_requests_use_twenty_calendar_year_chunks():
     )
     collector = SouthAfricaDWSCollector(client=client)
 
-    assert collector.collect(
-        station_id="C1H001",
-        start_date="1980-06-01",
-        end_date="2021-02-03",
-    ) == []
+    assert (
+        collector.collect(
+            station_id="C1H001",
+            start_date="1980-06-01",
+            end_date="2021-02-03",
+        )
+        == []
+    )
 
     assert [call["params"]["StartDT"] for call in client.calls] == [
         "1980-06-01",
@@ -146,6 +146,11 @@ def test_no_data_response_is_an_empty_collection():
     collector = SouthAfricaDWSCollector(
         client=FakeClient(["<html><body><pre>No data for this period</pre></body></html>"])
     )
+    assert collector.collect(station_id="X3H023", days=1, end_date="2026-01-01") == []
+
+
+def test_empty_pre_is_an_empty_collection():
+    collector = SouthAfricaDWSCollector(client=FakeClient(["<html><body><pre></pre></body></html>"]))
     assert collector.collect(station_id="X3H023", days=1, end_date="2026-01-01") == []
 
 

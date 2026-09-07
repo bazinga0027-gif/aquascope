@@ -134,6 +134,17 @@ SOURCES: dict[str, SourceMeta] = {
         license="CC-BY-4.0", redistributable=True,
         attribution="Chagas et al. (2020), CAMELS-BR",
     ),
+    # ── Africa ──────────────────────────────────────────────────────────
+    "south_africa_dws": _s(
+        key="south_africa_dws", label="South Africa DWS Verified Hydrology", region="South Africa",
+        description="Verified daily river discharge and point water level from South African gauges",
+        agency="South African Department of Water and Sanitation", country="ZAF",
+        homepage="https://www.dws.gov.za/Hydrology/",
+        variables=("discharge", "water_level"),
+        output_model="StreamflowReading | WaterLevelReading",
+        license="unknown", redistributable=False,
+        attribution="South African Department of Water and Sanitation (reuse terms not yet verified)",
+    ),
     # ── Europe ──────────────────────────────────────────────────────────
     "uk_ea": _s(
         key="uk_ea", label="Environment Agency (England)", region="United Kingdom",
@@ -446,6 +457,7 @@ def build_collector(source_key: str, api_key: str | None = None, **ctor_kwargs):
         "grdc": lambda: c.GRDCCollector(),
         "openmeteo": lambda: c.OpenMeteoCollector(mode=ctor_kwargs.get("mode", "weather")),
         "sdg6": lambda: c.SDG6Collector(),
+        "south_africa_dws": lambda: c.SouthAfricaDWSCollector(),
         "gemstat": lambda: c.GEMStatCollector(),
         "aquastat": lambda: c.AquastatCollector(),
         "wapor": lambda: c.WaPORCollector(),
