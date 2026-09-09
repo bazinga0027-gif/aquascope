@@ -1,0 +1,292 @@
+name: Issue 211 read-only WRA contract probe
+
+on:
+  push:
+    branches:
+      - discovery/issue-211-wra-contract
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out discovery branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install probe dependency
+        run: python -m pip install --disable-pip-version-check httpx==0.28.1
+
+      - name: Probe current WRA contract without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/issue211-proof
+          python - <<'PY' | tee /tmp/issue211-proof/probe.log
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import platform
+          import ssl
+          import sys
+          from datetime import datetime
+          from pathlib import Path
+          from typing import Any
+
+          import httpx
+
+          OUT = Path("/tmp/issue211-proof")
+          GWEB = "https://gweb.wra.gov.tw"
+          METADATA_URL = (
+              "https://opendata.wra.gov.tw/api/v2/"
+              "9332bd66-0213-4380-a5d5-a43e7be49255"
+          )
+          STATION = "1140H099"
+          SERIES_PATH = "/HydroInfo/Comm/GetStDIDayList"
+          SESSION_PATHS = (
+              "/HydroInfo/RiverFlowQuery/",
+              "/HydroInfo/WCore?Corefunc=DI",
+          )
+
+          def sha256(data: bytes) -> str:
+              return hashlib.sha256(data).hexdigest()
+
+          def response_summary(response: httpx.Response) -> dict[str, Any]:
+              content_type = response.headers.get("content-type", "")
+              body = response.content
+              return {
+                  "request_method": response.request.method,
+                  "request_url": str(response.request.url),
+                  "status": response.status_code,
+                  "final_url": str(response.url),
+                  "content_type": content_type,
+                  "content_length": len(body),
+                  "sha256": sha256(body),
+                  "preview": response.text[:400].replace("\n", " "),
+              }
+
+          summary: dict[str, Any] = {
+              "authority": {
+                  "repository": "Rekin226/aquascope",
+                  "issue": 211,
+                  "upstream_base_sha": "51fced1fe63515d4977c65ac7cd80d2ca832d480",
+              },
+              "runtime": {
+                  "python": platform.python_version(),
+                  "openssl": ssl.OPENSSL_VERSION,
+                  "httpx": httpx.__version__,
+              },
+              "station": STATION,
+              "session_pages": [],
+          }
+
+          browser_headers = {
+              "User-Agent": (
+                  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/131.0 Safari/537.36"
+              ),
+              "Accept-Language": "en-US,en;q=0.9,zh-TW;q=0.8",
+          }
+
+          client = httpx.Client(
+              headers=browser_headers,
+              follow_redirects=True,
+              timeout=httpx.Timeout(180.0, connect=30.0),
+          )
+
+          referer = f"{GWEB}{SESSION_PATHS[0]}"
+          for path in SESSION_PATHS:
+              try:
+                  response = client.get(f"{GWEB}{path}")
+                  item = response_summary(response)
+                  summary["session_pages"].append(item)
+                  print(
+                      "SESSION",
+                      path,
+                      "status=",
+                      response.status_code,
+                      "type=",
+                      item["content_type"],
+                      "bytes=",
+                      item["content_length"],
+                  )
+                  if response.status_code == 200:
+                      referer = str(response.url)
+                      break
+              except Exception as exc:  # discovery evidence, not silent fallback
+                  item = {"path": path, "error": f"{type(exc).__name__}: {exc}"}
+                  summary["session_pages"].append(item)
+                  print("SESSION", path, "ERROR", item["error"])
+
+          ajax_headers = {
+              "Accept": "application/json, text/javascript, */*; q=0.01",
+              "Origin": GWEB,
+              "Referer": referer,
+              "X-Requested-With": "XMLHttpRequest",
+          }
+
+          try:
+              response = client.post(
+                  f"{GWEB}{SERIES_PATH}",
+                  data={"ST_NO": STATION},
+                  headers=ajax_headers,
+              )
+              summary["series_response"] = response_summary(response)
+              print(
+                  "SERIES",
+                  SERIES_PATH,
+                  "status=",
+                  response.status_code,
+                  "type=",
+                  response.headers.get("content-type", ""),
+                  "bytes=",
+                  len(response.content),
+              )
+              response.raise_for_status()
+              payload = response.json()
+          except Exception as exc:
+              summary["series_error"] = f"{type(exc).__name__}: {exc}"
+              OUT.joinpath("summary.json").write_text(
+                  json.dumps(summary, indent=2, ensure_ascii=False),
+                  encoding="utf-8",
+              )
+              print("SERIES ERROR", summary["series_error"])
+              raise
+
+          if not isinstance(payload, list):
+              raise TypeError(f"Expected a JSON list, got {type(payload).__name__}")
+
+          valid: list[tuple[datetime, float, dict[str, Any]]] = []
+          sentinel_count = 0
+          key_union: set[str] = set()
+          for row in payload:
+              if not isinstance(row, dict):
+                  continue
+              key_union.update(str(key) for key in row)
+              raw_date = row.get("yymmdd")
+              raw_value = row.get("DAVG")
+              try:
+                  when = datetime.strptime(str(raw_date), "%Y/%m/%d")
+                  value = float(raw_value)
+              except (TypeError, ValueError):
+                  continue
+              if value <= -9990:
+                  sentinel_count += 1
+                  continue
+              valid.append((when, value, row))
+
+          if not valid:
+              raise RuntimeError("Endpoint returned no parseable non-sentinel daily rows")
+
+          valid.sort(key=lambda item: item[0])
+          values = [item[1] for item in valid]
+          summary["series_contract"] = {
+              "endpoint": f"{GWEB}{SERIES_PATH}",
+              "method": "POST",
+              "form_body": {"ST_NO": STATION},
+              "payload_type": "list",
+              "payload_rows": len(payload),
+              "valid_daily_rows": len(valid),
+              "sentinel_rows": sentinel_count,
+              "keys": sorted(key_union),
+              "date_field": "yymmdd",
+              "value_field": "DAVG",
+              "first_date": valid[0][0].date().isoformat(),
+              "last_date": valid[-1][0].date().isoformat(),
+              "minimum_cms": min(values),
+              "maximum_cms": max(values),
+              "first_rows": [item[2] for item in valid[:3]],
+              "last_rows": [item[2] for item in valid[-3:]],
+          }
+          print(
+              "SERIES CONTRACT PASS",
+              "rows=",
+              len(valid),
+              "span=",
+              summary["series_contract"]["first_date"],
+              "to",
+              summary["series_contract"]["last_date"],
+              "keys=",
+              sorted(key_union),
+          )
+
+          metadata_summary: dict[str, Any] = {
+              "endpoint": METADATA_URL,
+              "params": {"format": "JSON", "page": 1, "size": 1000},
+          }
+          try:
+              metadata_response = client.get(
+                  METADATA_URL,
+                  params=metadata_summary["params"],
+              )
+              metadata_summary["response"] = response_summary(metadata_response)
+              metadata_response.raise_for_status()
+              metadata = metadata_response.json()
+              if not isinstance(metadata, list):
+                  raise TypeError(
+                      f"Expected metadata JSON list, got {type(metadata).__name__}"
+                  )
+              station_rows = [
+                  row
+                  for row in metadata
+                  if isinstance(row, dict)
+                  and str(row.get("basinidentifier") or "").strip() == STATION
+              ]
+              metadata_summary.update(
+                  {
+                      "rows": len(metadata),
+                      "station_match_count": len(station_rows),
+                      "station_match": station_rows[0] if station_rows else None,
+                  }
+              )
+              if not station_rows:
+                  raise RuntimeError(
+                      f"Metadata endpoint did not contain station {STATION}"
+                  )
+              print(
+                  "METADATA CONTRACT PASS",
+                  "rows=",
+                  len(metadata),
+                  "station=",
+                  STATION,
+                  "name=",
+                  station_rows[0].get("observatoryname"),
+              )
+          except Exception as exc:
+              metadata_summary["error"] = f"{type(exc).__name__}: {exc}"
+              summary["metadata"] = metadata_summary
+              OUT.joinpath("summary.json").write_text(
+                  json.dumps(summary, indent=2, ensure_ascii=False),
+                  encoding="utf-8",
+              )
+              print("METADATA ERROR", metadata_summary["error"])
+              raise
+
+          summary["metadata"] = metadata_summary
+          summary["result"] = "PASS"
+          OUT.joinpath("summary.json").write_text(
+              json.dumps(summary, indent=2, ensure_ascii=False),
+              encoding="utf-8",
+          )
+          print("ISSUE 211 READ-ONLY CONTRACT PROBE: PASS")
+          PY
+
+      - name: Upload discovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue211-readonly-contract-proof
+          path: /tmp/issue211-proof
+          if-no-files-found: error
